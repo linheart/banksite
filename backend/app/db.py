@@ -4,8 +4,6 @@ from typing import Generator
 from dotenv import load_dotenv
 from sqlmodel import SQLModel, Session, create_engine
 
-from . import models as _models
-
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
