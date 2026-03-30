@@ -1,9 +1,11 @@
-import { Routes, Route } from "react-router-dom";
-import ProtectedRoute from "./components/ProtectedRoute";
+import { Route, Routes } from "react-router-dom";
 import Navbar from "./components/Navbar";
-import Home from "./pages/Home";
+import ProtectedRoute from "./components/ProtectedRoute";
+import RoleRoute from "./components/RoleRoute";
+import Access from "./pages/Access";
 import Detail from "./pages/Detail";
 import Form from "./pages/Form";
+import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 
@@ -34,19 +36,28 @@ function App() {
       <Route
         path="/add"
         element={
-          <ProtectedRoute>
+          <RoleRoute allowedRoles={["admin", "operator"]}>
             <Navbar />
             <Form />
-          </ProtectedRoute>
+          </RoleRoute>
         }
       />
       <Route
         path="/edit/:id"
         element={
-          <ProtectedRoute>
+          <RoleRoute allowedRoles={["admin", "operator"]}>
             <Navbar />
             <Form />
-          </ProtectedRoute>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/access"
+        element={
+          <RoleRoute allowedRoles={["admin"]}>
+            <Navbar />
+            <Access />
+          </RoleRoute>
         }
       />
     </Routes>

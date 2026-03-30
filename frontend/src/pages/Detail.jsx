@@ -2,30 +2,59 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import AuditList from "../components/AuditList";
-import Card from "../components/Card";
-import { fetchBranches } from "../components/branches";
+import { useAuthContext } from "../components/AuthProvider";
+import { buildBranchesMap, fetchBranches } from "../components/branches";
+import { isHandledByGlobalInterceptor } from "../components/httpErrors";
+import { showToast } from "../components/toastBus";
 
 export default function Detail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { role } = useAuthContext();
   const [cfg, setCfg] = useState(null);
   const [branchesMap, setBranchesMap] = useState({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  const canEdit = role === "admin" || role === "operator";
+  const canDelete = role === "admin";
+  const canSeeAudit = role === "admin" || role === "auditor";
 
   useEffect(() => {
-    Promise.all([axios.get(`/api/configs/${id}`), fetchBranches()])
-      .then(([cfgRes, branches]) => {
-        setCfg(cfgRes.data);
-        const map = {};
-        (branches || []).forEach((b) => {
-          map[b.id] = b.name;
-        });
-        setBranchesMap(map);
+    let isActive = true;
+    setLoading(true);
+    setLoadError("");
+
+    Promise.allSettled([axios.get(`/api/configs/${id}`), fetchBranches()])
+      .then(([cfgResult, branchesResult]) => {
+        if (!isActive) return;
+
+        if (cfgResult.status === "rejected") {
+          setCfg(null);
+          if (cfgResult.reason?.response?.status === 404) {
+            setLoadError("not_found");
+            return;
+          }
+          setLoadError("load_failed");
+          return;
+        }
+
+        setCfg(cfgResult.value.data);
+        if (branchesResult.status === "fulfilled") {
+          setBranchesMap(buildBranchesMap(branchesResult.value));
+          return;
+        }
+        setBranchesMap({});
       })
-      .catch(() => {
-        setCfg(null);
-      })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (isActive) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
   }, [id]);
 
   const handleDelete = async () => {
@@ -33,25 +62,37 @@ export default function Detail() {
     try {
       await axios.delete(`/api/configs/${id}`);
       navigate("/");
-    } catch (e) {
-      alert("Не удалось удалить");
+    } catch (err) {
+      const status = err?.response?.status;
+      if (isHandledByGlobalInterceptor(status)) {
+        return;
+      }
+      showToast("Не удалось удалить конфигурацию");
     }
   };
 
   if (loading)
     return (
       <div className="container">
-        <Card>
+        <div className="card">
           <div className="center">Загрузка...</div>
-        </Card>
+        </div>
       </div>
     );
-  if (!cfg)
+  if (loadError === "load_failed")
     return (
       <div className="container">
-        <Card>
+        <div className="card">
+          <div className="center">Не удалось загрузить</div>
+        </div>
+      </div>
+    );
+  if (loadError === "not_found" || !cfg)
+    return (
+      <div className="container">
+        <div className="card">
           <div className="center">Не найдено</div>
-        </Card>
+        </div>
       </div>
     );
 
@@ -65,26 +106,32 @@ export default function Detail() {
             {branchesMap[cfg.branch_id] ?? `Branch ${cfg.branch_id}`}
           </p>
         </div>
-        <div className="page-actions">
-          <Link to={`/edit/${cfg.id}`} className="btn">
-            Изменить
-          </Link>
-          <button onClick={handleDelete} className="btn btn-danger">
-            Удалить
-          </button>
-        </div>
+        {canEdit || canDelete ? (
+          <div className="page-actions">
+            {canEdit ? (
+              <Link to={`/edit/${cfg.id}`} className="btn">
+                Изменить
+              </Link>
+            ) : null}
+            {canDelete ? (
+              <button onClick={handleDelete} className="btn btn-danger">
+                Удалить
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="grid">
-        <div className="grid-col">
-          <Card>
+        <div>
+          <div className="card">
             <h4>Конфигурация</h4>
             <pre className="config-block">{cfg.config_text}</pre>
-          </Card>
+          </div>
         </div>
 
         <aside className="grid-aside">
-          <Card>
+          <div className="card">
             <h4>Данные</h4>
             <div className="meta-row">
               <strong>Изменено</strong>
@@ -100,12 +147,14 @@ export default function Detail() {
                 {branchesMap[cfg.branch_id] ?? `Branch ${cfg.branch_id}`}
               </div>
             </div>
-          </Card>
+          </div>
 
-          <Card>
-            <h4>Аудит</h4>
-            <AuditList configId={cfg.id} />
-          </Card>
+          {canSeeAudit ? (
+            <div className="card">
+              <h4>Аудит</h4>
+              <AuditList configId={cfg.id} branchesMap={branchesMap} />
+            </div>
+          ) : null}
         </aside>
       </div>
     </main>

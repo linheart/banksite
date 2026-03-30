@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 
 function Badge({ children, type = "DEFAULT" }) {
@@ -13,31 +13,30 @@ function Badge({ children, type = "DEFAULT" }) {
   return <span className={`badge ${cls}`}>{children}</span>;
 }
 
-export default function AuditList({ configId }) {
+export default function AuditList({
+  configId = null,
+  limit = 20,
+  compact = false,
+  showConfig = false,
+  branchesMap = {},
+}) {
   const [items, setItems] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [branches, setBranches] = useState([]);
 
   useEffect(() => {
-    axios.get("/api/users").then((r) => setUsers(r.data));
-    axios.get("/api/branches").then((r) => setBranches(r.data));
-  }, []);
+    const endpoint = configId
+      ? `/api/configs/${configId}/audit`
+      : `/api/audit?limit=${limit}`;
 
-  useEffect(() => {
-    if (!configId) return;
     axios
-      .get(`/api/configs/${configId}/audit`)
+      .get(endpoint)
       .then((r) => setItems(r.data))
       .catch(() => setItems([]));
-  }, [configId]);
+  }, [configId, limit]);
 
-  const getUserName = (id) =>
-    users.find((u) => u.id === id)?.username || `User #${id}`;
-
-  const getBranchName = (id) =>
-    branches.find((b) => b.id === Number(id))?.name || id;
+  const getBranchName = (id) => branchesMap[Number(id)] ?? id;
 
   const formatDescription = (desc) => {
+    if (!desc) return "";
     const branchMatch = desc.match(/branch_id: '(\d+)' -> '(\d+)'/);
     if (branchMatch) {
       const oldName = getBranchName(branchMatch[1]);
@@ -47,22 +46,21 @@ export default function AuditList({ configId }) {
     return desc;
   };
 
-  if (!items.length) {
-    return <div className="audit-empty">No audit entries</div>;
-  }
+  if (!items.length) return <div className="audit-empty">Записей аудита пока нет</div>;
 
   return (
-    <div className="audit-list">
+    <div className={`audit-list ${compact ? "audit-list--compact" : ""}`}>
       {items.map((a) => (
         <div key={a.id} className="audit-row">
           <div className="audit-left">
             <Badge type={a.action}>{a.action}</Badge>
             <div className="audit-meta">
               <div className="meta-user">
-                {a.user_id ? getUserName(a.user_id) : "Unknown"}
+                {a.user_id ? `User #${a.user_id}` : "Unknown"}
               </div>
+              {showConfig && <div className="meta-config">Конфиг #{a.config_id}</div>}
               <div className="meta-time">
-                {a.timestamp ? new Date(a.timestamp).toLocaleString() : ""}
+                {a.event_at ? new Date(a.event_at).toLocaleString() : ""}
               </div>
             </div>
           </div>

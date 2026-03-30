@@ -1,11 +1,13 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
+import { useAuthContext } from "../components/AuthProvider";
+import { showToast } from "../components/toastBus";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { refreshUser } = useAuthContext();
   const [formData, setFormData] = useState({ username: "", password: "" });
-  const [error, setError] = useState("");
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -13,12 +15,16 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
     try {
       await axios.post("/api/login", formData, { withCredentials: true });
+      await refreshUser();
       navigate("/");
     } catch (err) {
-      setError("Ошибка входа");
+      if (err?.response?.data?.detail === "invalid credentials") {
+        showToast("Неверный логин или пароль");
+        return;
+      }
+      showToast("Ошибка входа");
     }
   };
 
@@ -26,7 +32,6 @@ export default function Login() {
     <div className="auth-page">
       <div className="auth-card">
         <h2>Вход</h2>
-        {error && <p className="error">{error}</p>}
         <form onSubmit={handleSubmit}>
           <label>Имя</label>
           <input

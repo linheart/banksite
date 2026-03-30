@@ -1,11 +1,14 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import Card from "../components/Card";
+import { isHandledByGlobalInterceptor } from "../components/httpErrors";
+import { showToast } from "../components/toastBus";
 
 export default function Form() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [branches, setBranches] = useState([]);
+  const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     branch_id: "",
     name: "",
@@ -14,23 +17,38 @@ export default function Form() {
   });
 
   useEffect(() => {
+    axios
+      .get("/api/branches")
+      .then((res) => setBranches(res.data || []))
+      .catch(() => setBranches([]));
+  }, []);
+
+  useEffect(() => {
     if (id) {
       axios
         .get(`/api/configs/${id}`)
         .then((r) => {
           setFormData({
-            branch_name: "",
-            ...r.data,
-          });
-          axios.get("/api/branches").then((res) => {
-            const found = res.data.find((b) => b.id === r.data.branch_id);
-            if (found)
-              setFormData((prev) => ({ ...prev, branch_name: found.name }));
+            branch_id: String(r.data?.branch_id ?? ""),
+            name: r.data?.name ?? "",
+            device_type: r.data?.device_type ?? "",
+            config_text: r.data?.config_text ?? "",
           });
         })
-        .catch(() => {});
+        .catch((err) => {
+          const status = err?.response?.status;
+          if (isHandledByGlobalInterceptor(status)) {
+            return;
+          }
+          if (status === 404) {
+            showToast("Конфигурация не найдена");
+            navigate("/");
+            return;
+          }
+          showToast("Не удалось загрузить конфигурацию");
+        });
     }
-  }, [id]);
+  }, [id, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -39,27 +57,42 @@ export default function Form() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const branches = await axios.get("/api/branches").then((r) => r.data);
-    let branch = branches.find(
-      (b) => b.name.toLowerCase() === formData.branch_name.toLowerCase()
-    );
-    if (!branch) {
-      branch = await axios
-        .post("/api/branches", { name: formData.branch_name })
-        .then((r) => r.data);
+    setError("");
+
+    const branchId = Number(formData.branch_id);
+    if (!branchId) {
+      setError("Выберите филиал из списка");
+      return;
     }
 
     const payload = {
-      branch_id: branch.id,
+      branch_id: branchId,
       name: formData.name,
       device_type: formData.device_type,
       config_text: formData.config_text,
     };
 
-    if (id) await axios.put(`/api/configs/${id}`, payload);
-    else await axios.post(`/api/configs`, payload);
+    try {
+      if (id) await axios.put(`/api/configs/${id}`, payload);
+      else await axios.post(`/api/configs`, payload);
 
-    navigate("/");
+      navigate("/");
+    } catch (err) {
+      const status = err?.response?.status;
+      if (isHandledByGlobalInterceptor(status)) {
+        return;
+      }
+      const detail = err?.response?.data?.detail;
+      if (detail === "config already exists in branch") {
+        showToast("Конфигурация с таким названием уже есть в этом филиале");
+        return;
+      }
+      if (detail === "branch not found") {
+        showToast("Филиал не найден");
+        return;
+      }
+      showToast("Не удалось сохранить конфигурацию");
+    }
   };
 
   return (
@@ -73,16 +106,23 @@ export default function Form() {
         </p>
       </div>
 
-      <Card>
+      <div className="card">
         <form onSubmit={handleSubmit}>
+          {error && <p className="error">{error}</p>}
           <label>Филиал</label>
-          <input
-            name="branch_name"
-            value={formData.branch_name}
+          <select
+            name="branch_id"
+            value={formData.branch_id || ""}
             onChange={handleChange}
             required
-          />
-
+          >
+            <option value="">Выберите филиал</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
           <label>Название</label>
           <input
             name="name"
@@ -109,7 +149,7 @@ export default function Form() {
           />
 
           <div style={{ display: "flex", gap: 12 }}>
-            <button type="submit" className="btn">
+            <button type="submit" className="btn" disabled={!branches.length}>
               {id ? "Обновить" : "Создать"}
             </button>
             <button
@@ -121,7 +161,7 @@ export default function Form() {
             </button>
           </div>
         </form>
-      </Card>
+      </div>
     </main>
   );
 }
