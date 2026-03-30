@@ -347,6 +347,9 @@ form textarea {
   border-radius: 4px;
   font-size: 1rem;
 }
+form textarea {
+  resize: none;
+}
 form label {
   font-weight: 500;
   margin-bottom: 0.3rem;

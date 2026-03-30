@@ -145,6 +145,7 @@ export default function Form() {
             value={formData.config_text || ""}
             onChange={handleChange}
             rows="8"
+            spellCheck={false}
             required
           />
 
