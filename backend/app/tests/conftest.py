@@ -1,3 +1,4 @@
+import importlib
 import os
 import sys
 from pathlib import Path
@@ -16,7 +17,7 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["JWT_SECRET"] = "test-secret"
 os.environ["COOKIE_SAMESITE"] = "lax"
 
-from app import db
+db = importlib.import_module("app.db")
 
 db.engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
 
