@@ -14,7 +14,10 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import db
-from .api import auth_router, branches_router, configs_router, users_router
+from .api.auth import router as auth_router
+from .api.branches import router as branches_router
+from .api.configs import router as configs_router
+from .api.users import router as users_router
 from .logger import configure_logging, get_logger
 
 
